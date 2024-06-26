@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CityCraft</title>
+    <style>
+        body { font-family: Arial, sans-serif; }
+        #game-board {
+            display: grid;
+            grid-template-columns: repeat(30, 50px);
+            grid-gap: 1px;
+            background-color: #ccc;
+        }
+        .cell {
+            width: 50px;
+            height: 50px;
+            background-color: #fff;
+            border: 1px solid #999;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: bold;
+            font-size: 10px;
+        }
+        .residential { background-color: #90EE90; }
+        .commercial { background-color: #ADD8E6; }
+        .industrial { background-color: #FFB6C1; }
+        .police { background-color: #4169E1; }
+        .fire { background-color: #FF4500; }
+        .hospital { background-color: #FF69B4; }
+        .power-plant { background-color: #8B4513; }
+        .water-tower { background-color: #00FFFF; }
+        .sewage-plant { background-color: #8B4513; }
+        .level-1::after { content: "I"; }
+        .level-2::after { content: "II"; }
+        .level-3::after { content: "III"; }
+        #day-night { width: 100%; height: 20px; background: linear-gradient(to right, #87CEEB, #000080); }
+    </style>
+</head>
+<body>
+    <h1>CityCraft</h1>
+    <h3>Built by Soundguy06</h3>
+    <div id="day-night"></div>
+    <div id="game-board"></div>
+    <div id="controls">
+        <button id="build-residential">Build Residential ($100)</button>
+        <button id="build-commercial">Build Commercial ($200)</button>
+        <button id="build-industrial">Build Industrial ($300)</button>
+        <button id="build-police">Build Police Station ($500)</button>
+        <button id="build-fire">Build Fire Station ($500)</button>
+        <button id="build-hospital">Build Hospital ($1000)</button>
+        <button id="build-power-plant">Build Power Plant ($2000)</button>
+        <button id="build-water-tower">Build Water Tower ($1500)</button>
+        <button id="build-sewage-plant">Build Sewage Plant ($1500)</button>
+        <button id="upgrade-building">Upgrade Selected Building</button>
+        <button id="trigger-disaster">Trigger Random Disaster</button>
+    </div>
+    <div id="stats">
+        <p>Population: <span id="population">0</span></p>
+        <p>Money: $<span id="money">10000</span></p>
+        <p>Happiness: <span id="happiness">100</span>%</p>
+        <p>Tax Rate: <span id="tax-rate">10</span>% <button id="increase-tax">+</button> <button id="decrease-tax">-</button></p>
+        <p>Power: <span id="power">100</span>%</p>
+        <p>Water: <span id="water">100</span>%</p>
+        <p>Sewage: <span id="sewage">100</span>%</p>
+    </div>
+
+<footer>
+
+<h5>Build a web city on a 250 grid city.</h5>
+<h5>I hope you enjoy this project.</h5>
+<p>Build: V1 - A0001</p>
+
+</footer>
+
+
+    <script>
+        const gameBoard = document.getElementById('game-board');
+        const dayNightCycle = document.getElementById('day-night');
+        const populationEl = document.getElementById('population');
+        const moneyEl = document.getElementById('money');
+        const happinessEl = document.getElementById('happiness');
+        const taxRateEl = document.getElementById('tax-rate');
+        const powerEl = document.getElementById('power');
+        const waterEl = document.getElementById('water');
+        const sewageEl = document.getElementById('sewage');
+        let currentMoney = 10000;
+        let currentPopulation = 0;
+        let currentHappiness = 100;
+        let taxRate = 10;
+        let selectedBuilding = null;
+        let selectedCell = null;
+        let isNight = false;
+        let power = 100;
+        let water = 100;
+        let sewage = 100;
+
+        // Create game board
+        for (let i = 0; i < 250; i++) {
+            const cell = document.createElement('div');
+            cell.classList.add('cell');
+            cell.addEventListener('click', () => handleCellClick(cell));
+            gameBoard.appendChild(cell);
+        }
+
+        // Building selection
+        document.getElementById('build-residential').addEventListener('click', () => selectedBuilding = 'residential');
+        document.getElementById('build-commercial').addEventListener('click', () => selectedBuilding = 'commercial');
+        document.getElementById('build-industrial').addEventListener('click', () => selectedBuilding = 'industrial');
+        document.getElementById('build-police').addEventListener('click', () => selectedBuilding = 'police');
+        document.getElementById('build-fire').addEventListener('click', () => selectedBuilding = 'fire');
+        document.getElementById('build-hospital').addEventListener('click', () => selectedBuilding = 'hospital');
+        document.getElementById('build-power-plant').addEventListener('click', () => selectedBuilding = 'power-plant');
+        document.getElementById('build-water-tower').addEventListener('click', () => selectedBuilding = 'water-tower');
+        document.getElementById('build-sewage-plant').addEventListener('click', () => selectedBuilding = 'sewage-plant');
+
+        // Upgrade building
+        document.getElementById('upgrade-building').addEventListener('click', () => {
+            if (selectedCell) {
+                upgradeBuilding(selectedCell);
+            } else {
+                alert("Please select a building to upgrade.");
+            }
+        });
+
+        // Trigger disaster
+        document.getElementById('trigger-disaster').addEventListener('click', triggerDisaster);
+
+        // Tax controls
+        document.getElementById('increase-tax').addEventListener('click', () => {
+            if (taxRate < 20) {
+                taxRate++;
+                updateTaxRate();
+            }
+        });
+        document.getElementById('decrease-tax').addEventListener('click', () => {
+            if (taxRate > 5) {
+                taxRate--;
+                updateTaxRate();
+            }
+        });
+
+        function updateTaxRate() {
+            taxRateEl.textContent = taxRate;
+            updateHappiness();
+        }
+
+        function handleCellClick(cell) {
+            if (selectedBuilding && !cell.classList.contains(selectedBuilding)) {
+                buildOnCell(cell);
+            } else {
+                selectedCell = cell;
+            }
+        }
+
+        function buildOnCell(cell) {
+            const cost = getBuildingCost(selectedBuilding);
+            if (currentMoney >= cost) {
+                cell.className = 'cell ' + selectedBuilding + ' level-1';
+                cell.textContent = selectedBuilding[0].toUpperCase();
+                currentMoney -= cost;
+                updateCity();
+            } else {
+                alert("Not enough money!");
+            }
+        }
+
+        function upgradeBuilding(cell) {
+            if (cell.classList.contains('level-1')) {
+                if (currentMoney >= 500) {
+                    cell.classList.replace('level-1', 'level-2');
+                    currentMoney -= 500;
+                } else {
+                    alert("Not enough money for upgrade!");
+                }
+            } else if (cell.classList.contains('level-2')) {
+                if (currentMoney >= 1000) {
+                    cell.classList.replace('level-2', 'level-3');
+                    currentMoney -= 1000;
+                } else {
+                    alert("Not enough money for upgrade!");
+                }
+            } else {
+                alert("Building is already at maximum level!");
+            }
+            updateCity();
+        }
+
+        function getBuildingCost(type) {
+            switch(type) {
+                case 'residential': return 100;
+                case 'commercial': return 200;
+                case 'industrial': return 300;
+                case 'police': return 500;
+                case 'fire': return 500;
+                case 'hospital': return 1000;
+                case 'power-plant': return 2000;
+                case 'water-tower': return 1500;
+                case 'sewage-plant': return 1500;
+                default: return 0;
+            }
+        }
+
+        function updateCity() {
+            const buildings = {
+                residential: [0, 0, 0],
+                commercial: [0, 0, 0],
+                industrial: [0, 0, 0],
+                police: [0, 0, 0],
+                fire: [0, 0, 0],
+                hospital: [0, 0, 0],
+                'power-plant': [0, 0, 0],
+                'water-tower': [0, 0, 0],
+                'sewage-plant': [0, 0, 0]
+            };
+
+            document.querySelectorAll('.cell').forEach(cell => {
+                for (let type in buildings) {
+                    if (cell.classList.contains(type)) {
+                        if (cell.classList.contains('level-1')) buildings[type][0]++;
+                        else if (cell.classList.contains('level-2')) buildings[type][1]++;
+                        else if (cell.classList.contains('level-3')) buildings[type][2]++;
+                    }
+                }
+            });
+
+            currentPopulation = (buildings.residential[0] * 10) + (buildings.residential[1] * 20) + (buildings.residential[2] * 30);
+            
+            // Calculate income
+            let income = (buildings.commercial[0] * 20) + (buildings.commercial[1] * 40) + (buildings.commercial[2] * 60);
+            income += (buildings.industrial[0] * 30) + (buildings.industrial[1] * 60) + (buildings.industrial[2] * 90);
+            income += (currentPopulation * taxRate / 100);
+
+            // Night time reduces commercial income
+            if (isNight) {
+                income *= 0.7;
+            }
+
+            // Calculate expenses
+            let expenses = (buildings.police[0] * 10) + (buildings.police[1] * 20) + (buildings.police[2] * 30);
+            expenses += (buildings.fire[0] * 10) + (buildings.fire[1] * 20) + (buildings.fire[2] * 30);
+            expenses += (buildings.hospital[0] * 20) + (buildings.hospital[1] * 40) + (buildings.hospital[2] * 60);
+            expenses += (buildings['power-plant'][0] * 50) + (buildings['power-plant'][1] * 100) + (buildings['power-plant'][2] * 150);
+            expenses += (buildings['water-tower'][0] * 30) + (buildings['water-tower'][1] * 60) + (buildings['water-tower'][2] * 90);
+            expenses += (buildings['sewage-plant'][0] * 30) + (buildings['sewage-plant'][1] * 60) + (buildings['sewage-plant'][2] * 90);
+            
+            currentMoney += income - expenses;
+
+            // Update resources
+            power = Math.min(100, ((buildings['power-plant'][0] * 30) + (buildings['power-plant'][1] * 60) + (buildings['power-plant'][2] * 90)) / currentPopulation * 100);
+            water = Math.min(100, ((buildings['water-tower'][0] * 30) + (buildings['water-tower'][1] * 60) + (buildings['water-tower'][2] * 90)) / currentPopulation * 100);
+            sewage = Math.min(100, ((buildings['sewage-plant'][0] * 30) + (buildings['sewage-plant'][1] * 60) + (buildings['sewage-plant'][2] * 90)) / currentPopulation * 100);
+
+            updateHappiness();
+
+            populationEl.textContent = currentPopulation;
+            moneyEl.textContent = currentMoney.toFixed(2);
+            happinessEl.textContent = currentHappiness.toFixed(2);
+            powerEl.textContent = power.toFixed(2);
+            waterEl.textContent = water.toFixed(2);
+            sewageEl.textContent = sewage.toFixed(2);
+        }
+
+        function updateHappiness() {
+            let happiness = 100;
+
+            // Services affect happiness
+            happiness -= Math.max(0, 20 - power);
+            happiness -= Math.max(0, 20 - water);
+            happiness -= Math.max(0, 20 - sewage);
+
+            // Tax rate affects happiness
+            happiness -= (taxRate - 10) * 2;
+
+            currentHappiness = Math.max(0, Math.min(100, happiness));
+        }
+
+        function triggerDisaster() {
+            const disasters = ['earthquake', 'fire', 'flood'];
+            const disaster = disasters[Math.floor(Math.random() * disasters.length)];
+            const affectedBuildings = Math.floor(Math.random() * 5) + 1;
+
+            alert(`A ${disaster} has struck the city! ${affectedBuildings} buildings have been damaged.`);
+
+            for (let i = 0; i < affectedBuildings; i++) {
+                const cells = document.querySelectorAll('.cell:not(.level-1)');
+                if (cells.length > 0) {
+                    const cell = cells[Math.floor(Math.random() * cells.length)];
+                    if (cell.classList.contains('level-3')) {
+                        cell.classList.replace('level-3', 'level-2');
+                    } else if (cell.classList.contains('level-2')) {
+                        cell.classList.replace('level-2', 'level-1');
+                    }
+                }
+            }
+
+            currentHappiness -= 10;
+            updateCity();
+        }
+
+        // Day/Night cycle
+        setInterval(() => {
+            isNight = !isNight;
+            dayNightCycle.style.background = isNight ? 'linear-gradient(to right, #000080, #87CEEB)' : 'linear-gradient(to right, #87CEEB, #000080)';
+            updateCity();
+        }, 30000); // 30 seconds for each day/night cycle
+
+        // Update the city every 5 seconds
+        setInterval(updateCity, 5000);
+    </script>
+</body>
+</html>
